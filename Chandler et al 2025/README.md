@@ -1,5 +1,7 @@
 ## Determinants of abortion views among reproductive age women in Georgia 2023–2024
 
+[DOI](https://doi.org/10.1371/journal.pone.0335370)
+
 Background
 Abortion is a continually debated legislative issue in the United States. We aimed to assess opinions toward abortion access amongst reproductive age adult women in Georgia, a state where abortion is banned after the detection of embryonic cardiac activity (around 6 weeks).
 
