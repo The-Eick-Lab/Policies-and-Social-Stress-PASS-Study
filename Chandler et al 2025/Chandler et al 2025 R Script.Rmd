@@ -1,0 +1,2333 @@
+---
+title: "PASS_abortion_views_final"
+author: "Madeline Chandler"
+date: "2025-10-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r, include = FALSE, warning = FALSE, message = FALSE}
+library(janitor)
+library(tidyverse)
+library(dplyr)
+library(knitr)
+library(gtsummary)
+library(broom.helpers)
+library(broom)
+library(ggplot2)
+library(flextable)
+library(cowplot)
+
+
+
+county_tbl <- table(raw_pass$county)
+
+gift1 <- rename(gift1, record_id = Record.ID)
+gift2 <- rename(gift2, record_id = Record.ID)
+gift3 <- rename(gift3, record_id = Record.ID)
+gift4 <- rename(gift4, record_id = Study.ID)
+
+gift1 <- gift1 %>% select(record_id)
+gift2 <- gift2 %>% select(record_id)
+gift3 <- gift3 %>% select(record_id)
+gift4 <- gift4 %>% select(record_id)
+
+gift <- rbind(gift1, gift2, gift3, gift4)
+pass <- semi_join(raw_pass, gift, by = "record_id")
+
+# creating variable for Alabama participants
+pass$state_live[is.na(pass$state_live)] <- 1
+pass <- pass %>% filter(state_live==1)
+
+```
+
+
+```{r, include = FALSE, message=FALSE, warning = FALSE}
+### Recode missing 
+
+# Marital Status
+pass$marital_status[pass$marital_status > 77] <- NA
+
+# Education
+pass$education[pass$education > 6] <- NA
+
+# Household income
+pass$hh_income_cat[pass$hh_income_cat > 11] <- NA
+
+# Race
+pass$race[pass$race > 8] <- NA
+
+# Ethnicity
+pass$ethnicity[pass$ethnicity > 1] <- NA
+
+# Employment Status
+pass$employment[pass$employment > 3] <- NA
+
+# Student 
+pass$student[pass$student > 1] <- NA
+
+# Have you been pregnant before?
+pass$pregnant_before[pass$pregnant_before > 1] <- NA
+
+# Currently pregnant 
+pass$curr_pregnant[pass$curr_pregnant > 1] <- NA
+
+# Religious person
+pass$religious_person[pass$religious_person > 1] <- NA
+
+# Religious service attendance
+pass$relgious_service_amount[pass$relgious_service_amount > 6] <- NA
+
+# Religious service attendance
+pass$pol_orientation[pass$pol_orientation > 5] <- NA
+
+## Scale pregnancy to Pregnancy views
+# Do you think abortion should be..
+pass$abortion_view1[pass$abortion_view1 > 4] <- NA
+
+# abortion_view5
+pass$abortion_view5[pass$abortion_view5 > 3] <- NA
+
+# abortion_view6
+pass$abortion_view6[pass$abortion_view6 > 3] <- NA
+table(pass$abortion_view6, useNA = "always")
+
+# abortion_view8
+pass$abortion_view8[pass$abortion_view8 > 3] <- NA
+
+##### Marital Status
+pass$marital_status[pass$marital_status >= 77 ] <- NA
+
+## Collapse factor variables  
+pass$pol_orientation_new <- fct_collapse(as.factor(pass$pol_orientation), "1" = c("1", "2"), "2" = c("3","4", "5"))
+
+pass$marital_status <- fct_collapse(as.factor(pass$marital_status), "1" = c("1", "6"), "2" = c("2", "3", "4", "5"))
+
+pass$education <- fct_collapse(as.factor(pass$education), "1" = c("1", "2" ,"3"), "2" = c("4", "5","6"))
+
+pass$hh_income_cat <- fct_collapse(as.factor(pass$hh_income_cat), "1" = c("1", "2", "3", "4", "5"), "2" = c("6", "7", "8", "9", "10", "11"))
+
+pass$race_tbl <- fct_collapse(as.factor(pass$race), "1" = "8", "2" = "3",  "3" = "2",
+                              "4" = c("1", "5", "6", "7"))
+
+pass$race <- fct_collapse(as.factor(pass$race), "1" = "8", "2" = "3", 
+                          "3" = c("1", "2", "5", "7"))
+
+pass$employment <- fct_collapse(as.factor(pass$employment), "0" = "0", "1" = c("1", "3"))
+
+pass$abortion_view1 <- fct_collapse(as.factor(pass$abortion_view1), "1" = c("1", "2"), "2" = c("3", "4"))
+
+pass$abortion_view6 <- fct_collapse(as.factor(pass$abortion_view6), "1" = "1", "2" = c("2", "3"))
+
+pass$abortion_view8 <- fct_collapse(as.factor(pass$abortion_view8), "1" = "1", "2" = c("2", "3"))
+
+pass$abortion_view5 <- fct_collapse(as.factor(pass$abortion_view5), "1" = "1", "2" = c("2", "3"))
+
+pass$relgious_service_amount <- fct_collapse(as.factor(pass$relgious_service_amount), "1" = c("3","4", "5", "6"), "2" = c("1", "2"))
+
+# County - creating Metro Atlanta variable
+pass$county <- if_else(pass$county==29, 1,
+                if_else(pass$county==32, 1,
+                  if_else(pass$county==34, 1,
+                   if_else(pass$county==45,1,
+                    if_else(pass$county==49, 1,
+                     if_else(pass$county==57, 1,
+                      if_else(pass$county==59, 1,
+                       if_else(pass$county==61, 1,
+                        if_else(pass$county==68, 1,
+                          if_else(pass$county==76, 1,
+                            if_else(pass$county==123, 1,
+                             2)))))))))))
+
+## Check demographic class and change to factor if necessary
+pass$student <- as.factor(pass$student)
+pass$pregnant_before <- as.factor(pass$pregnant_before)
+pass$race <- as.factor(pass$race)
+pass$race_tbl <- as.factor(pass$race_tbl)
+pass$employment <- as.factor(pass$employment)
+pass$ethnicity <- as.factor(pass$ethnicity)
+
+```
+
+
+```{r, include = TRUE, message=FALSE, warning = FALSE}
+# Labeling Factor Variables
+
+# Abortion - Overall
+pass <- pass %>%
+  mutate(abortion_view1 = recode_factor(abortion_view1, 
+                               `1` = "Legal in most/all cases", 
+                               `2` = "Illegal in most/all cases"))
+
+# 6 weeks
+pass <- pass %>%
+  mutate(abortion_view6 = recode_factor(abortion_view6, 
+                               `1` = "Legal in this case", 
+                               `2` = "Illegal or it depends"))
+
+# 14 weeks
+pass <- pass %>%
+  mutate(abortion_view5 = recode_factor(abortion_view5, 
+                               `1` = "Legal in this case", 
+                               `2` = "Illegal or it depends"))
+
+# 24 weeks
+pass <- pass %>%
+  mutate(abortion_view8 = recode_factor(abortion_view8, 
+                               `1` = "Legal in this case", 
+                               `2` = "Illegal or it depends"))
+
+# Race
+pass <- pass %>%
+  mutate(race = recode_factor(race, 
+                               `1` = "White", 
+                               `2` = "Black",
+                               `3` = "Non-White")) 
+
+pass <- pass %>%
+  mutate(race_tbl = recode_factor(race_tbl, 
+                               `1` = "White", 
+                               `2` = "Black",
+                               `3` = "Asian",
+                               `4` = "Other"))
+
+# Ethnicity
+pass <- pass %>%
+  mutate(ethnicity = recode_factor(ethnicity, 
+                               `0` = "Not Hispanic or Latina", 
+                               `1` = "Hispanic or Latina")) 
+
+# Political orientation
+pass <- pass %>%
+  mutate(pol_orientation_new = recode_factor(pol_orientation_new, 
+                               `1` = "Liberal", 
+                               `2` = "Moderate or Conservative"))
+
+# Education
+pass <- pass %>%
+  mutate(education = recode_factor(education, 
+                               `1` = "No college degree", 
+                               `2` = "College degree"))
+
+# Household annual income
+pass <- pass %>%
+  mutate(hh_income_cat = recode_factor(hh_income_cat, 
+                               `1` = "< $54,999", 
+                               `2` = "≥ $55,000"))
+
+# Employment
+pass <- pass %>%
+  mutate(employment = recode_factor(employment, 
+                               `0` = "Unemployed", 
+                               `1` = "Employed part or full time")) 
+
+# Student
+pass <- pass %>%
+  mutate(student = recode_factor(student, 
+                               `0` = "Not a student", 
+                               `1` = "Current student")) 
+
+# marital status
+pass <- pass %>%
+  mutate(marital_status = recode_factor(marital_status, 
+                               `1` = "Married or living with partner", 
+                               `2` = "Single")) 
+
+# pregnant before
+pass <- pass %>%
+  mutate(pregnant_before = recode_factor(pregnant_before, 
+                               `1` = "Been pregnant before", 
+                               `0` = "Never been pregnant")) 
+
+# religious person
+pass <- pass %>%
+  mutate(religious_person = recode_factor(religious_person, 
+                               `0` = "Non-religious person", 
+                               `1` = "Religious Person")) 
+
+# religious service attendance
+pass <- pass %>%
+  mutate(relgious_service_amount = recode_factor(relgious_service_amount, 
+                               `1` = "Monthly or less often", 
+                               `2` = "Once a week or more often")) 
+
+# Atlanta Metro
+pass <- pass %>%
+  mutate(county = recode_factor(county, 
+                               `1` = "Metro Atlanta County", 
+                               `2` = "Not in Metro Atlanta")) 
+
+```
+
+# Main Text Tables & Figures
+## Table 1: Demographics
+### Distribution of sociodemographic characteristics and scenario-specific abortion views within the Policies and Social Stress (PASS) Study (N=177).
+```{r, include = TRUE, message=FALSE, warning = FALSE}
+
+demo1 <- pass %>% select(age, race_tbl, ethnicity,
+          pol_orientation_new, education, hh_income_cat, employment, student,
+          marital_status, pregnant_before, religious_person, relgious_service_amount,
+          county, abortion_view1, abortion_view6, abortion_view6,
+                         abortion_view5, abortion_view8)
+
+demo1 |>
+  tbl_summary(
+    statistic = list(
+      all_categorical() ~ "{n} ({p}%)",
+      all_continuous() ~ "{mean} ({sd})  [{min},{max}]"
+    ),
+    missing_text = "Missing",
+    label = list(abortion_view1="Abortion View - Overall",
+                 abortion_view6="Abortion View - 6 Weeks",
+                 abortion_view5="Abortion View - 14 Weeks",
+                 abortion_view8="Abortion View - 24 Weeks",
+                 race_tbl="Race", ethnicity="Ethnicity",
+                 age="Age", pol_orientation_new="Political Orientation", education="Educational Attainment", hh_income_cat="Household Income",
+    employment="Employment Status", student="Student", marital_status="Marital Status",
+    pregnant_before="Ever Been Pregnant",
+    religious_person="Religious Identity", 
+    relgious_service_amount="Religious Service Attendance", county="County")
+    )
+```
+
+## Figure 1
+### Associations between political, religious, and geographic characteristics and abortion views for week-based scenarios, estimated using unadjusted linear regression models. Exposures are as follows: (A) political orientation (moderate or conservative, ref: liberal), (B) religious identity (religious person, ref: non-religious person), (C) religious service attendance (once a week or more, ref: once per month or less), and (D) county of residence (non-Atlanta metro county, ref: Atlanta metro county). The models are estimating the odds of believing that abortion should be illegal or that “it depends” in this case (vs. abortion should be legal in this case). 
+```{r, include = FALSE, message=FALSE, warning = FALSE}
+# Regression models - Figure 1A
+# Political Orientation
+
+# Overall
+fig2a_ovr <- glm(abortion_view1 ~ pol_orientation_new, data = pass, family = binomial)
+fig2a_ovr_summary <- tidy(fig2a_ovr, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "Overall",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2a_ovr_summary <- fig2a_ovr_summary[1,]
+
+# 6 Weeks
+fig2a_6w <- glm(abortion_view6 ~ pol_orientation_new, data = pass, family = binomial)
+fig2a_6w_summary <- tidy(fig2a_6w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "6 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2a_6w_summary <- fig2a_6w_summary[1,]
+
+# 14 Weeks
+fig2a_14w <- glm(abortion_view5 ~ pol_orientation_new, data = pass, family = binomial)
+fig2a_14w_summary <- tidy(fig2a_14w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "14 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2a_14w_summary <- fig2a_14w_summary[1,]
+
+# 24 Weeks
+fig2a_24w <- glm(abortion_view8 ~ pol_orientation_new, data = pass, family = binomial)
+fig2a_24w_summary <- tidy(fig2a_24w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "24 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2a_24w_summary <- fig2a_24w_summary[1,]
+
+figure_2a_models <- rbind(fig2a_ovr_summary, fig2a_6w_summary, fig2a_14w_summary,
+                          fig2a_24w_summary)
+figure_2a_models$model <- factor(figure_2a_models$model, levels = rev(c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")))
+
+figure_2a <- ggplot(figure_2a_models, aes(x = odds_ratio, y = model)) +
+  geom_point(size = 0.5) +
+  geom_pointrange(aes(xmin = lci, xmax = uci),
+                 size = 0.5,  linewidth = 0.75) +
+  geom_vline(xintercept = 1, color = "grey25", linetype = "dashed", alpha = 0.5) +  
+  xlab("Odds Ratio (95% CI)") +
+  ylab("") +
+  scale_x_continuous(n.breaks=8, limits = c(0,40)) +
+ theme_classic(base_family = "Helvetica") +
+  theme(title = element_text(color = "grey25"),
+        axis.title.x = element_text(color = "grey25"),
+        axis.title.y = element_text(color = "grey25"),
+        axis.text.x = element_text(color = "grey25", size = 15),
+        axis.text.y = element_text(color = "grey25", size = 15),
+        panel.grid = element_blank(),
+        legend.position = "none") 
+
+figure_2a
+
+```
+
+
+```{r, include = FALSE, message=FALSE, warning = FALSE}
+# Regression models - Figure 2B
+# Religious Identity
+
+# Overall
+fig2b_ovr <- glm(abortion_view1 ~ religious_person, data = pass, family = binomial)
+fig2b_ovr_summary <- tidy(fig2b_ovr, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "Overall",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2b_ovr_summary <- fig2b_ovr_summary[1,]
+
+# 6 Weeks
+fig2b_6w <- glm(abortion_view6 ~ religious_person, data = pass, family = binomial)
+fig2b_6w_summary <- tidy(fig2b_6w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "6 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2b_6w_summary <- fig2b_6w_summary[1,]
+
+# 14 Weeks
+fig2b_14w <- glm(abortion_view5 ~ religious_person, data = pass, family = binomial)
+fig2b_14w_summary <- tidy(fig2b_14w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "14 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2b_14w_summary <- fig2b_14w_summary[1,]
+
+# 24 Weeks
+fig2b_24w <- glm(abortion_view8 ~ religious_person, data = pass, family = binomial)
+fig2b_24w_summary <- tidy(fig2b_24w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "24 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2b_24w_summary <- fig2b_24w_summary[1,]
+
+figure_2b_models <- rbind(fig2b_ovr_summary, fig2b_6w_summary, fig2b_14w_summary,
+                          fig2b_24w_summary)
+figure_2b_models$model <- factor(figure_2b_models$model, levels = rev(c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")))
+
+figure_2b <- ggplot(figure_2b_models, aes(x = odds_ratio, y = model)) +
+  geom_point(size = 0.5) +
+  geom_pointrange(aes(xmin = lci, xmax = uci),
+                 size = 0.5,  linewidth = 0.75) +
+  geom_vline(xintercept = 1, color = "grey25", linetype = "dashed", alpha = 0.5) +  
+  xlab("Odds Ratio (95% CI)") +
+  ylab("") +
+  scale_x_continuous(n.breaks=8, limits = c(0,10)) +
+ theme_classic(base_family = "Helvetica") +
+  theme(title = element_text(color = "grey25"),
+        axis.title.x = element_text(color = "grey25"),
+        axis.title.y = element_text(color = "grey25"),
+        axis.text.x = element_text(color = "grey25", size = 15),
+        axis.text.y = element_text(color = "grey25", size = 15),
+        panel.grid = element_blank(),
+        legend.position = "none") 
+figure_2b
+
+```
+
+
+```{r, include = FALSE, message=FALSE, warning = FALSE}
+# Regression models - Figure 2C
+# Religious Service Attendance
+
+# Overall
+fig2c_ovr <- glm(abortion_view1 ~ relgious_service_amount, data = pass, family = binomial)
+fig2c_ovr_summary <- tidy(fig2c_ovr, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "Overall",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2c_ovr_summary <- fig2c_ovr_summary[1,]
+
+# 6 Weeks
+fig2c_6w <- glm(abortion_view6 ~ relgious_service_amount, data = pass, family = binomial)
+fig2c_6w_summary <- tidy(fig2c_6w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "6 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2c_6w_summary <- fig2c_6w_summary[1,]
+
+# 14 Weeks
+fig2c_14w <- glm(abortion_view5 ~ relgious_service_amount, data = pass, family = binomial)
+fig2c_14w_summary <- tidy(fig2c_14w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "14 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2c_14w_summary <- fig2c_14w_summary[1,]
+
+# 24 Weeks
+fig2c_24w <- glm(abortion_view8 ~ relgious_service_amount, data = pass, family = binomial)
+fig2c_24w_summary <- tidy(fig2c_24w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "24 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2c_24w_summary <- fig2c_24w_summary[1,]
+
+figure_2c_models <- rbind(fig2c_ovr_summary, fig2c_6w_summary, fig2c_14w_summary,
+                          fig2c_24w_summary)
+figure_2c_models$model <- factor(figure_2c_models$model, levels = rev(c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")))
+
+figure_2c <- ggplot(figure_2c_models, aes(x = odds_ratio, y = model)) +
+  geom_point(size = 0.5) +
+  geom_pointrange(aes(xmin = lci, xmax = uci),
+                 size = 0.5,  linewidth = 0.75) +
+  geom_vline(xintercept = 1, color = "grey25", linetype = "dashed", alpha = 0.5) +  
+  xlab("Odds Ratio (95% CI)") +
+  ylab("") +
+  scale_x_continuous(n.breaks=9, limits = c(0,18)) +
+ theme_classic(base_family = "Helvetica") +
+  theme(title = element_text(color = "grey25"),
+        axis.title.x = element_text(color = "grey25"),
+        axis.title.y = element_text(color = "grey25"),
+        axis.text.x = element_text(color = "grey25", size = 15),
+        axis.text.y = element_text(color = "grey25", size = 15),
+        panel.grid = element_blank(),
+        legend.position = "none") 
+figure_2c
+
+```
+
+
+```{r, include = FALSE, message=FALSE, warning = FALSE}
+# Regression models - Figure 2D
+# Atlanta Metro
+theme_set(theme_gray(base_size = 16))
+# Overall
+fig2d_ovr <- glm(abortion_view1 ~ county, data = pass, family = binomial)
+fig2d_ovr_summary <- tidy(fig2d_ovr, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "Overall",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2d_ovr_summary <- fig2d_ovr_summary[1,]
+
+# 6 Weeks
+fig2d_6w <- glm(abortion_view6 ~ county, data = pass, family = binomial)
+fig2d_6w_summary <- tidy(fig2d_6w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "6 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2d_6w_summary <- fig2d_6w_summary[1,]
+
+# 14 Weeks
+fig2d_14w <- glm(abortion_view5 ~ county, data = pass, family = binomial)
+fig2d_14w_summary <- tidy(fig2d_14w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "14 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2d_14w_summary <- fig2d_14w_summary[1,]
+
+# 24 Weeks
+fig2d_24w <- glm(abortion_view8 ~ county, data = pass, family = binomial)
+fig2d_24w_summary <- tidy(fig2d_24w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "24 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig2d_24w_summary <- fig2d_24w_summary[1,]
+
+figure_2d_models <- rbind(fig2d_ovr_summary, fig2d_6w_summary, fig2d_14w_summary,
+                          fig2d_24w_summary)
+figure_2d_models$model <- factor(figure_2d_models$model, levels = rev(c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")))
+
+figure_2d <- ggplot(figure_2d_models, aes(x = odds_ratio, y = model)) +
+  geom_point(size = 0.5) +
+  geom_pointrange(aes(xmin = lci, xmax = uci),
+                 size = 0.5,  linewidth = 0.75) +
+  geom_vline(xintercept = 1, color = "grey25", linetype = "dashed", alpha = 0.5) +  
+  xlab("Odds Ratio (95% CI)") +
+  ylab("") +
+  scale_x_continuous(n.breaks=8, limits = c(0,15)) +
+ theme_classic(base_family = "Helvetica") +
+  theme(title = element_text(color = "grey25"),
+        axis.title.x = element_text(color = "grey25"),
+        axis.title.y = element_text(color = "grey25"),
+        axis.text.x = element_text(color = "grey25", size = 15),
+        axis.text.y = element_text(color = "grey25", size = 15),
+        panel.grid = element_blank(),
+        legend.position = "none") 
+figure_2d
+
+```
+
+```{r, include = TRUE, message=FALSE, warning = FALSE, fig.width=8, fig.height=8}
+
+library(scales)
+
+num_ticks <- 5  # Adjust this number as needed
+
+figure_2a <- figure_2a + scale_x_continuous(breaks = scales::breaks_pretty(n = num_ticks))
+figure_2b <- figure_2b + scale_x_continuous(breaks = scales::breaks_pretty(n = num_ticks))
+figure_2c <- figure_2c + scale_x_continuous(breaks = scales::breaks_pretty(n = num_ticks))
+figure_2d <- figure_2d + scale_x_continuous(breaks = scales::breaks_pretty(n = num_ticks))
+
+fig_2 <- plot_grid(figure_2a, figure_2b, figure_2c, figure_2d,
+                   labels = c("A", "B", "C", "D"),
+                   nrow = 2) + theme(plot.margin = margin(10, 10, 10, 10))
+
+
+fig_2
+
+tiff("figure1.tiff", width = 6, height = 4, units = "in", res = 1000)
+print(fig_2)   
+dev.off()
+
+```
+
+
+## Table 2: Unadjusted regressions
+### Associations between sociodemographic characteristics and odds of self-reporting that abortion should be illegal according to different scenarios, estimated using unadjusted logistic regression models in the Policies and Social Stress (PASS) Study.
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Race - Overall
+race_ovr <- glm(abortion_view1 ~ race,
+  family=binomial (link='logit'), data=pass)
+
+race_ovr_summary <- tbl_regression(race_ovr, exponentiate = TRUE, 
+                               label = list(race="Race")) 
+
+# Race - 6 Weeks
+race_6w <- glm(abortion_view6 ~ race,
+  family=binomial (link='logit'), data=pass)
+
+race_6w_summary <- tbl_regression(race_6w, exponentiate = TRUE, 
+                               label = list(race="Race")) 
+
+# Race - 14 Weeks
+race_14w <- glm(abortion_view5 ~ race,
+  family=binomial (link='logit'), data=pass)
+
+race_14w_summary <- tbl_regression(race_14w, exponentiate = TRUE, 
+                               label = list(race="Race")) 
+
+# Race - 24 Weeks
+race_24w <- glm(abortion_view8 ~ race,
+  family=binomial (link='logit'), data=pass)
+
+race_24w_summary <- tbl_regression(race_24w, exponentiate = TRUE, 
+                               label = list(race="Race")) 
+
+
+race_merge <- tbl_merge(
+  tbls = list(race_ovr_summary, race_6w_summary, race_14w_summary, race_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+race_merge <- race_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+race_merge
+
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Ethnicity - Overall
+eth_ovr <- glm(abortion_view1 ~ ethnicity,
+  family=binomial (link='logit'), data=pass)
+
+eth_ovr_summary <- tbl_regression(eth_ovr, exponentiate = TRUE, 
+                               label = list(ethnicity="Ethnicity")) 
+
+# Race - 6 Weeks
+eth_6w <- glm(abortion_view6 ~ ethnicity,
+  family=binomial (link='logit'), data=pass)
+
+eth_6w_summary <- tbl_regression(eth_6w, exponentiate = TRUE, 
+                               label = list(ethnicity="Ethnicity")) 
+
+# Race - 14 Weeks
+eth_14w <- glm(abortion_view5 ~ ethnicity,
+  family=binomial (link='logit'), data=pass)
+
+eth_14w_summary <- tbl_regression(eth_14w, exponentiate = TRUE, 
+                               label = list(ethnicity="Ethnicity")) 
+
+# Race - 24 Weeks
+eth_24w <- glm(abortion_view8 ~ ethnicity,
+  family=binomial (link='logit'), data=pass)
+
+eth_24w_summary <- tbl_regression(eth_24w, exponentiate = TRUE, 
+                               label = list(ethnicity="Ethnicity")) 
+
+
+eth_merge <- tbl_merge(
+  tbls = list(eth_ovr_summary, eth_6w_summary, eth_14w_summary, eth_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+eth_merge <- eth_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+eth_merge
+
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Marital Status
+mar_ovr <- glm(abortion_view1 ~ marital_status,
+  family=binomial (link='logit'), data=pass)
+
+mar_ovr_summary <- tbl_regression(mar_ovr, exponentiate = TRUE, 
+                               label = list(marital_status="Marital Status")) 
+
+# Marital Status - 6 Weeks
+mar_6w <- glm(abortion_view6 ~ marital_status,
+  family=binomial (link='logit'), data=pass)
+
+mar_6w_summary <- tbl_regression(mar_6w, exponentiate = TRUE, 
+                               label = list(marital_status="Marital Status")) 
+
+# Marital Status - 14 Weeks
+mar_14w <- glm(abortion_view5 ~ marital_status,
+  family=binomial (link='logit'), data=pass)
+
+mar_14w_summary <- tbl_regression(mar_14w, exponentiate = TRUE, 
+                               label = list(marital_status="Marital Status")) 
+
+# Marital Status - 24 Weeks
+mar_24w <- glm(abortion_view8 ~ marital_status,
+  family=binomial (link='logit'), data=pass)
+
+mar_24w_summary <- tbl_regression(mar_24w, exponentiate = TRUE, 
+                               label = list(marital_status="Marital Status")) 
+
+
+mar_merge <- tbl_merge(
+  tbls = list(mar_ovr_summary, mar_6w_summary, mar_14w_summary, mar_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+mar_merge <- mar_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+mar_merge
+```
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Household Income
+inc_ovr <- glm(abortion_view1 ~ hh_income_cat,
+  family=binomial (link='logit'), data=pass)
+
+inc_ovr_summary <- tbl_regression(inc_ovr, exponentiate = TRUE, 
+                               label = list(hh_income_cat="Household Income")) 
+
+# Household Income - 6 Weeks
+inc_6w <- glm(abortion_view6 ~ hh_income_cat,
+  family=binomial (link='logit'), data=pass)
+
+inc_6w_summary <- tbl_regression(inc_6w, exponentiate = TRUE, 
+                               label = list(hh_income_cat="Household Income")) 
+
+# Household Income - 14 Weeks
+inc_14w <- glm(abortion_view5 ~ hh_income_cat,
+  family=binomial (link='logit'), data=pass)
+
+inc_14w_summary <- tbl_regression(inc_14w, exponentiate = TRUE, 
+                               label = list(hh_income_cat="Household Income")) 
+
+# Household Income  - 24 Weeks
+inc_24w <- glm(abortion_view8 ~ hh_income_cat,
+  family=binomial (link='logit'), data=pass)
+
+inc_24w_summary <- tbl_regression(inc_24w, exponentiate = TRUE, 
+                               label = list(hh_income_cat="Household Income")) 
+
+
+inc_merge <- tbl_merge(
+  tbls = list(inc_ovr_summary, inc_6w_summary, inc_14w_summary, inc_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+inc_merge <- inc_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+inc_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Prior Pregnancy
+preg_ovr <- glm(abortion_view1 ~ pregnant_before,
+  family=binomial (link='logit'), data=pass)
+
+preg_ovr_summary <- tbl_regression(preg_ovr, exponentiate = TRUE, 
+                               label = list(pregnant_before="Prior Pregnancy")) 
+
+# Prior Pregnancy - 6 Weeks
+preg_6w <- glm(abortion_view6 ~ pregnant_before,
+  family=binomial (link='logit'), data=pass)
+
+preg_6w_summary <- tbl_regression(preg_6w, exponentiate = TRUE, 
+                               label = list(pregnant_before="Prior Pregnancy")) 
+
+# Prior Pregnancy - 14 Weeks
+preg_14w <- glm(abortion_view5 ~ pregnant_before,
+  family=binomial (link='logit'), data=pass)
+
+preg_14w_summary <- tbl_regression(preg_14w, exponentiate = TRUE, 
+                               label = list(pregnant_before="Prior Pregnancy")) 
+
+# Prior Pregnancy  - 24 Weeks
+preg_24w <- glm(abortion_view8 ~ pregnant_before,
+  family=binomial (link='logit'), data=pass)
+
+preg_24w_summary <- tbl_regression(preg_24w, exponentiate = TRUE, 
+                               label = list(pregnant_before="Prior Pregnancy")) 
+
+
+preg_merge <- tbl_merge(
+  tbls = list(preg_ovr_summary, preg_6w_summary, preg_14w_summary, preg_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+preg_merge <- preg_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+preg_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Employment
+emp_ovr <- glm(abortion_view1 ~ employment,
+  family=binomial (link='logit'), data=pass)
+
+emp_ovr_summary <- tbl_regression(emp_ovr, exponentiate = TRUE, 
+                               label = list(employment="Employment Status")) 
+
+# Employment - 6 Weeks
+emp_6w <- glm(abortion_view6 ~ employment,
+  family=binomial (link='logit'), data=pass)
+
+emp_6w_summary <- tbl_regression(emp_6w, exponentiate = TRUE, 
+                               label = list(employment="Employment Status")) 
+
+# Employment - 14 Weeks
+emp_14w <- glm(abortion_view5 ~ employment,
+  family=binomial (link='logit'), data=pass)
+
+emp_14w_summary <- tbl_regression(emp_14w, exponentiate = TRUE, 
+                               label = list(employment="Employment Status")) 
+
+# Employment  - 24 Weeks
+emp_24w <- glm(abortion_view8 ~ employment,
+  family=binomial (link='logit'), data=pass)
+
+emp_24w_summary <- tbl_regression(emp_24w, exponentiate = TRUE, 
+                               label = list(employment="Employment Status")) 
+
+
+emp_merge <- tbl_merge(
+  tbls = list(emp_ovr_summary, emp_6w_summary, emp_14w_summary, emp_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+emp_merge <- emp_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+emp_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Student
+stud_ovr <- glm(abortion_view1 ~ student,
+  family=binomial (link='logit'), data=pass)
+
+stud_ovr_summary <- tbl_regression(stud_ovr, exponentiate = TRUE, 
+                               label = list(student="Student")) 
+
+# Student - 6 Weeks
+stud_6w <- glm(abortion_view6 ~ student,
+  family=binomial (link='logit'), data=pass)
+
+stud_6w_summary <- tbl_regression(stud_6w, exponentiate = TRUE, 
+                               label = list(student="Student")) 
+
+# Student - 14 Weeks
+stud_14w <- glm(abortion_view5 ~ student,
+  family=binomial (link='logit'), data=pass)
+
+stud_14w_summary <- tbl_regression(stud_14w, exponentiate = TRUE, 
+                               label = list(student="Student")) 
+
+# Student  - 24 Weeks
+stud_24w <- glm(abortion_view8 ~ student,
+  family=binomial (link='logit'), data=pass)
+
+stud_24w_summary <- tbl_regression(stud_24w, exponentiate = TRUE, 
+                               label = list(student="Student")) 
+
+
+stud_merge <- tbl_merge(
+  tbls = list(stud_ovr_summary, stud_6w_summary, stud_14w_summary, stud_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+stud_merge <- stud_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+stud_merge
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Education
+ed_ovr <- glm(abortion_view1 ~ education,
+  family=binomial (link='logit'), data=pass)
+
+ed_ovr_summary <- tbl_regression(ed_ovr, exponentiate = TRUE, 
+                               label = list(education="Education")) 
+
+# Education - 6 Weeks
+ed_6w <- glm(abortion_view6 ~ education,
+  family=binomial (link='logit'), data=pass)
+
+ed_6w_summary <- tbl_regression(ed_6w, exponentiate = TRUE, 
+                               label = list(education="Education")) 
+
+# Education - 14 Weeks
+ed_14w <- glm(abortion_view5 ~ education,
+  family=binomial (link='logit'), data=pass)
+
+ed_14w_summary <- tbl_regression(ed_14w, exponentiate = TRUE, 
+                               label = list(education="Education")) 
+
+# Education  - 24 Weeks
+ed_24w <- glm(abortion_view8 ~ education,
+  family=binomial (link='logit'), data=pass)
+
+ed_24w_summary <- tbl_regression(ed_24w, exponentiate = TRUE, 
+                               label = list(education="Education")) 
+
+
+ed_merge <- tbl_merge(
+  tbls = list(ed_ovr_summary, ed_6w_summary, ed_14w_summary, ed_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+ed_merge <- ed_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+ed_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Age
+age_ovr <- glm(abortion_view1 ~ age,
+  family=binomial (link='logit'), data=pass)
+
+age_ovr_summary <- tbl_regression(age_ovr, exponentiate = TRUE, 
+                               label = list(age="Age")) 
+
+# Age - 6 Weeks
+age_6w <- glm(abortion_view6 ~ age,
+  family=binomial (link='logit'), data=pass)
+
+age_6w_summary <- tbl_regression(age_6w, exponentiate = TRUE, 
+                               label = list(age="Age")) 
+
+# Age - 14 Weeks
+age_14w <- glm(abortion_view5 ~ age,
+  family=binomial (link='logit'), data=pass)
+
+age_14w_summary <- tbl_regression(age_14w, exponentiate = TRUE, 
+                               label = list(age="Age")) 
+
+# Age  - 24 Weeks
+age_24w <- glm(abortion_view8 ~ age,
+  family=binomial (link='logit'), data=pass)
+
+age_24w_summary <- tbl_regression(age_24w, exponentiate = TRUE, 
+                               label = list(age="Age")) 
+
+
+age_merge <- tbl_merge(
+  tbls = list(age_ovr_summary, age_6w_summary, age_14w_summary, age_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+age_merge <- age_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+age_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Stacking demographic OR tables
+table_2 <- tbl_stack(
+  tbls = list(race_merge, eth_merge, mar_merge, inc_merge, preg_merge, emp_merge,                       stud_merge, ed_merge, age_merge)
+)
+table_2
+
+```
+
+# Supplemental Material
+## Table S1
+### Associations between demographic, political, religious, and geographic characteristics and abortion views for week-based scenarios, estimated using adjusted logistic regression models. The models are estimating the odds of believing that abortion should be illegal or that “it depends” in this case (vs. abortion should be legal in this case) and are adjusted for age, education status, marital status, and prior pregnancy. 
+
+
+```{r, include = FALSE, message=FALSE, warning = FALSE}
+# Political Orientation
+
+fig3a_ovr <- glm(abortion_view1 ~ pol_orientation_new + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3a_ovr_summary <- tidy(fig3a_ovr, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "Overall",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3a_ovr_summary <- fig3a_ovr_summary[1,]
+
+# 6 Weeks
+fig3a_6w <- glm(abortion_view6 ~ pol_orientation_new + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3a_6w_summary <- tidy(fig3a_6w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "6 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3a_6w_summary <- fig3a_6w_summary[1,]
+
+# 14 Weeks
+fig3a_14w <- glm(abortion_view5 ~ pol_orientation_new + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3a_14w_summary <- tidy(fig3a_14w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "14 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3a_14w_summary <- fig3a_14w_summary[1,]
+
+# 24 Weeks
+fig3a_24w <- glm(abortion_view8 ~ pol_orientation_new + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3a_24w_summary <- tidy(fig3a_24w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "24 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3a_24w_summary <- fig3a_24w_summary[1,]
+
+
+```
+
+
+```{r, include = FALSE, message=FALSE, warning = FALSE}
+# Regression models - Figure S1-B
+fig3b_ovr <- glm(abortion_view1 ~ religious_person + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3b_ovr_summary <- tidy(fig3b_ovr, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "Overall",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3b_ovr_summary <- fig3b_ovr_summary[1,]
+
+# 6 Weeks
+fig3b_6w <- glm(abortion_view6 ~ religious_person + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3b_6w_summary <- tidy(fig3b_6w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "6 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3b_6w_summary <- fig3b_6w_summary[1,]
+
+# 14 Weeks
+fig3b_14w <- glm(abortion_view5 ~ religious_person + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3b_14w_summary <- tidy(fig3b_14w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "14 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3b_14w_summary <- fig3b_14w_summary[1,]
+
+# 24 Weeks
+fig3b_24w <- glm(abortion_view8 ~ religious_person + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3b_24w_summary <- tidy(fig3b_24w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "24 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3b_24w_summary <- fig3b_24w_summary[1,]
+
+
+```
+
+
+```{r, include = FALSE, message=FALSE, warning = FALSE}
+# Regression models - Figure 3C
+# Religious Service Attendance - adjusting by political orientation
+
+fig3c_ovr <- glm(abortion_view1 ~ relgious_service_amount + age + education +                        pregnant_before + marital_status, data = pass, family = binomial)
+fig3c_ovr_summary <- tidy(fig3c_ovr, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "Overall",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3c_ovr_summary <- fig3c_ovr_summary[1,]
+
+# 6 Weeks
+fig3c_6w <- glm(abortion_view6 ~ relgious_service_amount + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3c_6w_summary <- tidy(fig3c_6w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "6 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3c_6w_summary <- fig3c_6w_summary[1,]
+
+# 14 Weeks
+fig3c_14w <- glm(abortion_view5 ~ relgious_service_amount + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3c_14w_summary <- tidy(fig3c_14w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "14 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3c_14w_summary <- fig3c_14w_summary[1,]
+
+# 24 Weeks
+fig3c_24w <- glm(abortion_view8 ~ relgious_service_amount + age + education + pregnant_before + marital_status, data = pass, family = binomial)
+fig3c_24w_summary <- tidy(fig3c_24w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "24 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3c_24w_summary <- fig3c_24w_summary[1,]
+
+
+```
+
+
+```{r, include = FALSE, message=FALSE, warning = FALSE}
+# Regression models - Figure 2D
+# Atlanta Metro - adjusting for religion and politics
+fig3d_ovr <- glm(abortion_view1 ~ county + age + education +                        pregnant_before + marital_status, data = pass, family = binomial)
+fig3d_ovr_summary <- tidy(fig3d_ovr, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "Overall",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3d_ovr_summary <- fig3d_ovr_summary[1,]
+
+# 6 Weeks
+fig3d_6w <- glm(abortion_view6 ~ county + age + education + pregnant_before +
+               marital_status, data = pass, family = binomial)
+fig3d_6w_summary <- tidy(fig3d_6w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "6 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3d_6w_summary <- fig3d_6w_summary[1,]
+
+# 14 Weeks
+fig3d_14w <- glm(abortion_view5 ~ county + age + education + pregnant_before +
+               marital_status, data = pass, family = binomial)
+fig3d_14w_summary <- tidy(fig3d_14w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "14 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3d_14w_summary <- fig3d_14w_summary[1,]
+
+# 24 Weeks
+fig3d_24w <- glm(abortion_view8 ~ county + age + education + pregnant_before +
+               marital_status, data = pass, family = binomial)
+fig3d_24w_summary <- tidy(fig3d_24w, conf.int = TRUE, conf.level = 0.95) %>%
+  filter(term != "(Intercept)") %>%
+  mutate(model = "24 Weeks",    odds_ratio = exp(estimate),   lci = exp(conf.low), uci = exp(conf.high)) %>%
+  select(model, odds_ratio, lci, uci)
+fig3d_24w_summary <- fig3d_24w_summary[1,]
+
+
+```
+
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# A Panel - Political Orientation
+pol_ovr_sa <- tbl_regression(fig3a_ovr, exponentiate = TRUE, 
+              label = list(pol_orientation_new="Political Orientation")) 
+
+# Pol - 6 Weeks
+pol_6w_sa <- tbl_regression(fig3a_6w, exponentiate = TRUE, 
+              label = list(pol_orientation_new="Political Orientation")) 
+
+# Pol - 14 Weeks
+pol_14w_sa <- tbl_regression(fig3a_14w, exponentiate = TRUE, 
+              label = list(pol_orientation_new="Political Orientation")) 
+
+# Pol - 24 Weeks
+pol_24w_sa <- tbl_regression(fig3a_24w, exponentiate = TRUE, 
+              label = list(pol_orientation_new="Political Orientation")) 
+
+
+pol_sa_merge <- tbl_merge(
+  tbls = list(pol_ovr_sa, pol_6w_sa, pol_14w_sa, pol_24w_sa),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+pol_sa_merge <- pol_sa_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+pol_sa_merge <- pol_sa_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+pol_sa_merge
+```
+
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# B Panel - Religious Identity
+# Overall
+rel1_ovr_sa <- tbl_regression(fig3b_ovr, exponentiate = TRUE, 
+              label = list(religious_person="Religious Identity")) 
+
+# Pol - 6 Weeks
+rel1_6w_sa <- tbl_regression(fig3b_6w, exponentiate = TRUE, 
+              label = list(religious_person="Religious Identity")) 
+
+# Pol - 14 Weeks
+rel1_14w_sa <- tbl_regression(fig3b_14w, exponentiate = TRUE, 
+              label = list(religious_person="Religious Identity")) 
+
+# Pol - 24 Weeks
+rel1_24w_sa <- tbl_regression(fig3b_24w, exponentiate = TRUE, 
+              label = list(religious_person="Religious Identity")) 
+
+
+rel1_sa_merge <- tbl_merge(
+  tbls = list(rel1_ovr_sa, rel1_6w_sa, rel1_14w_sa, rel1_24w_sa),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+rel1_sa_merge <- rel1_sa_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+rel1_sa_merge <- rel1_sa_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+rel1_sa_merge
+
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# C Panel - Religious Service Attendance
+# Overall
+rel2_ovr_sa <- tbl_regression(fig3c_ovr, exponentiate = TRUE, 
+              label = list(relgious_service_amount="Religious Service Attendance")) 
+
+# Pol - 6 Weeks
+rel2_6w_sa <- tbl_regression(fig3c_6w, exponentiate = TRUE, 
+              label = list(relgious_service_amount="Religious Service Attendance")) 
+
+# Pol - 14 Weeks
+rel2_14w_sa <- tbl_regression(fig3c_14w, exponentiate = TRUE, 
+              label = list(relgious_service_amount="Religious Service Attendance")) 
+
+# Pol - 24 Weeks
+rel2_24w_sa <- tbl_regression(fig3c_24w, exponentiate = TRUE, 
+              label = list(relgious_service_amount="Religious Service Attendance")) 
+
+
+rel2_sa_merge <- tbl_merge(
+  tbls = list(rel2_ovr_sa, rel2_6w_sa, rel2_14w_sa, rel2_24w_sa),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+rel2_sa_merge <- rel2_sa_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+rel2_sa_merge <- rel2_sa_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+rel2_sa_merge
+
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# D Panel - County of Residence
+# Overall
+count_ovr_sa <- tbl_regression(fig3d_ovr, exponentiate = TRUE, 
+              label = list(county="County of Residence")) 
+
+# Pol - 6 Weeks
+count_6w_sa <- tbl_regression(fig3d_6w, exponentiate = TRUE, 
+              label = list(county="County of Residence")) 
+
+# Pol - 14 Weeks
+count_14w_sa <- tbl_regression(fig3d_14w, exponentiate = TRUE, 
+              label = list(county="County of Residence")) 
+
+# Pol - 24 Weeks
+count_24w_sa <- tbl_regression(fig3d_24w, exponentiate = TRUE, 
+              label = list(county="County of Residence")) 
+
+
+count_sa_merge <- tbl_merge(
+  tbls = list(count_ovr_sa, count_6w_sa, count_14w_sa, count_24w_sa),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+count_sa_merge <- count_sa_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+count_sa_merge <- count_sa_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+count_sa_merge
+
+```
+
+
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Age - adjusted
+age1_ovr <- glm(abortion_view1 ~ age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+age1_ovr_summary <- tbl_regression(age1_ovr, exponentiate = TRUE, 
+                               label = list(age="Age")) 
+
+# Age - 6 Weeks
+age1_6w <- glm(abortion_view6 ~ age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+age1_6w_summary <- tbl_regression(age1_6w, exponentiate = TRUE, 
+                               label = list(age="Age")) 
+
+# Age - 14 Weeks
+age1_14w <- glm(abortion_view5 ~ age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+age1_14w_summary <- tbl_regression(age1_14w, exponentiate = TRUE, 
+                               label = list(age="Age")) 
+
+# Age  - 24 Weeks
+age1_24w <- glm(abortion_view8 ~ age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+age1_24w_summary <- tbl_regression(age1_24w, exponentiate = TRUE, 
+                               label = list(age="Age")) 
+
+
+age1_merge <- tbl_merge(
+  tbls = list(age1_ovr_summary, age1_6w_summary, age1_14w_summary, age1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+age1_merge <- age1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+age1_merge <- age1_merge %>% 
+  modify_table_body(~ .x %>% slice(1:1))
+age1_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Race - adjusted
+race1_ovr <- glm(abortion_view1 ~ race + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+race1_ovr_summary <- tbl_regression(race1_ovr, exponentiate = TRUE, 
+                               label = list(race="Race")) 
+
+# Race - 6 Weeks
+race1_6w <- glm(abortion_view6 ~ race + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+race1_6w_summary <- tbl_regression(race1_6w, exponentiate = TRUE, 
+                               label = list(race="Race")) 
+
+# Race - 14 Weeks
+race1_14w <- glm(abortion_view5 ~ race + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+race1_14w_summary <- tbl_regression(race1_14w, exponentiate = TRUE, 
+                               label = list(race="Race")) 
+
+# Race  - 24 Weeks
+race1_24w <- glm(abortion_view8 ~ race + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+race1_24w_summary <- tbl_regression(race1_24w, exponentiate = TRUE, 
+                               label = list(race="Race")) 
+
+
+race1_merge <- tbl_merge(
+  tbls = list(race1_ovr_summary, race1_6w_summary, race1_14w_summary, race1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+race1_merge <- race1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+race1_merge <- race1_merge %>% 
+  modify_table_body(~ .x %>% slice(1:4))
+race1_merge
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Ethnicity - adjusted
+eth1_ovr <- glm(abortion_view1 ~ ethnicity + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+eth1_ovr_summary <- tbl_regression(eth1_ovr, exponentiate = TRUE, 
+                               label = list(ethnicity="Ethnicity")) 
+
+# Ethnicity - 6 Weeks
+eth1_6w <- glm(abortion_view6 ~ ethnicity + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+eth1_6w_summary <- tbl_regression(eth1_6w, exponentiate = TRUE, 
+                               label = list(ethnicity="Ethnicity")) 
+
+# Ethnicity - 14 Weeks
+eth1_14w <- glm(abortion_view5 ~ ethnicity + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+eth1_14w_summary <- tbl_regression(eth1_14w, exponentiate = TRUE, 
+                               label = list(ethnicity="Ethnicity")) 
+
+# Ethnicity  - 24 Weeks
+eth1_24w <- glm(abortion_view8 ~ ethnicity + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+eth1_24w_summary <- tbl_regression(eth1_24w, exponentiate = TRUE, 
+                               label = list(ethnicity="Ethnicity")) 
+
+
+eth1_merge <- tbl_merge(
+  tbls = list(eth1_ovr_summary, eth1_6w_summary, eth1_14w_summary, eth1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+eth1_merge <- eth1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+eth1_merge <- eth1_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+eth1_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Marital status - adjusted
+mar1_ovr <- glm(abortion_view1 ~ marital_status + age + education + pregnant_before,
+  family=binomial (link='logit'), data=pass)
+
+mar1_ovr_summary <- tbl_regression(mar1_ovr, exponentiate = TRUE, 
+                               label = list(marital_status="Marital Status")) 
+
+# marital status - 6 Weeks
+mar1_6w <- glm(abortion_view6 ~ marital_status + age + education + pregnant_before,
+  family=binomial (link='logit'), data=pass)
+
+mar1_6w_summary <- tbl_regression(mar1_6w, exponentiate = TRUE, 
+                               label = list(marital_status="Marital Status")) 
+
+# marital status - 14 Weeks
+mar1_14w <- glm(abortion_view5 ~ marital_status + age + education + pregnant_before,
+  family=binomial (link='logit'), data=pass)
+
+mar1_14w_summary <- tbl_regression(mar1_14w, exponentiate = TRUE, 
+                               label = list(marital_status="Marital Status")) 
+
+# marital status  - 24 Weeks
+mar1_24w <- glm(abortion_view8 ~ marital_status + age + education + pregnant_before,
+  family=binomial (link='logit'), data=pass)
+
+mar1_24w_summary <- tbl_regression(mar1_24w, exponentiate = TRUE, 
+                               label = list(marital_status="Marital Status")) 
+
+
+mar1_merge <- tbl_merge(
+  tbls = list(mar1_ovr_summary, mar1_6w_summary, mar1_14w_summary, mar1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+mar1_merge <- mar1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+mar1_merge <- mar1_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+mar1_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Income - adjusted
+inc1_ovr <- glm(abortion_view1 ~ hh_income_cat + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+inc1_ovr_summary <- tbl_regression(inc1_ovr, exponentiate = TRUE, 
+                               label = list(hh_income_cat="Household Income")) 
+
+# income - 6 Weeks
+inc1_6w <- glm(abortion_view6 ~ hh_income_cat + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+inc1_6w_summary <- tbl_regression(inc1_6w, exponentiate = TRUE, 
+                               label = list(hh_income_cat="Household Income")) 
+
+# income - 14 Weeks
+inc1_14w <- glm(abortion_view5 ~ hh_income_cat + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+inc1_14w_summary <- tbl_regression(inc1_14w, exponentiate = TRUE, 
+                               label = list(hh_income_cat="Household Income")) 
+
+# income  - 24 Weeks
+inc1_24w <- glm(abortion_view8 ~ hh_income_cat + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+inc1_24w_summary <- tbl_regression(inc1_24w, exponentiate = TRUE, 
+                               label = list(hh_income_cat="Household Income")) 
+
+
+inc1_merge <- tbl_merge(
+  tbls = list(inc1_ovr_summary, inc1_6w_summary, inc1_14w_summary, inc1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+inc1_merge <- inc1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+inc1_merge <- inc1_merge %>% 
+  modify_table_body(~ .x %>% filter(variable == "hh_income_cat"))
+inc1_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Ever been pregnant - adjusted
+preg1_ovr <- glm(abortion_view1 ~ pregnant_before + age + education + marital_status,
+  family=binomial (link='logit'), data=pass)
+
+preg1_ovr_summary <- tbl_regression(preg1_ovr, exponentiate = TRUE, 
+                               label = list(pregnant_before="Ever Been Pregnant")) 
+
+# Ever Been Pregnant - 6 Weeks
+preg1_6w <- glm(abortion_view6 ~ pregnant_before + age + education + marital_status,
+  family=binomial (link='logit'), data=pass)
+
+preg1_6w_summary <- tbl_regression(preg1_6w, exponentiate = TRUE, 
+                               label = list(pregnant_before="Ever Been Pregnant")) 
+
+# Ever Been Pregnant - 14 Weeks
+preg1_14w <- glm(abortion_view5 ~ pregnant_before + age + education + marital_status,
+  family=binomial (link='logit'), data=pass)
+
+preg1_14w_summary <- tbl_regression(preg1_14w, exponentiate = TRUE, 
+                               label = list(pregnant_before="Ever Been Pregnant")) 
+
+# Ever Been Pregnant  - 24 Weeks
+preg1_24w <- glm(abortion_view8 ~ pregnant_before + age + education + marital_status,
+  family=binomial (link='logit'), data=pass)
+
+preg1_24w_summary <- tbl_regression(preg1_24w, exponentiate = TRUE, 
+                               label = list(pregnant_before="Ever Been Pregnant")) 
+
+
+preg1_merge <- tbl_merge(
+  tbls = list(preg1_ovr_summary, preg1_6w_summary, preg1_14w_summary, preg1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+preg1_merge <- preg1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+preg1_merge <- preg1_merge %>% 
+  modify_table_body(~ .x %>% filter(variable == "pregnant_before"))
+preg1_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Employment status - adjusted
+emp1_ovr <- glm(abortion_view1 ~ employment + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+emp1_ovr_summary <- tbl_regression(emp1_ovr, exponentiate = TRUE, 
+                               label = list(employment="Employment Status")) 
+
+# Employment Status - 6 Weeks
+emp1_6w <- glm(abortion_view6 ~ employment + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+emp1_6w_summary <- tbl_regression(emp1_6w, exponentiate = TRUE, 
+                               label = list(employment="Employment Status")) 
+
+# Employment Status - 14 Weeks
+emp1_14w <- glm(abortion_view5 ~ employment + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+emp1_14w_summary <- tbl_regression(emp1_14w, exponentiate = TRUE, 
+                               label = list(employment="Employment Status")) 
+
+# Employment Status  - 24 Weeks
+emp1_24w <- glm(abortion_view8 ~ employment + age + education + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+emp1_24w_summary <- tbl_regression(emp1_24w, exponentiate = TRUE, 
+                               label = list(employment="Employment Status")) 
+
+
+emp1_merge <- tbl_merge(
+  tbls = list(emp1_ovr_summary, emp1_6w_summary, emp1_14w_summary, emp1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+emp1_merge <- emp1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+emp1_merge <- emp1_merge %>% 
+  modify_table_body(~ .x %>% filter(variable == "employment"))
+emp1_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Student - adjusted
+stud1_ovr <- glm(abortion_view1 ~ student + age + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+stud1_ovr_summary <- tbl_regression(stud1_ovr, exponentiate = TRUE, 
+                               label = list(student="Student")) 
+
+# Student - 6 Weeks
+stud1_6w <- glm(abortion_view6 ~ student + age + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+stud1_6w_summary <- tbl_regression(stud1_6w, exponentiate = TRUE, 
+                               label = list(student="Student")) 
+
+# Student - 14 Weeks
+stud1_14w <- glm(abortion_view5 ~ student + age + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+stud1_14w_summary <- tbl_regression(stud1_14w, exponentiate = TRUE, 
+                               label = list(student="Student")) 
+
+# Student  - 24 Weeks
+stud1_24w <- glm(abortion_view8 ~ student + age + pregnant_before + 
+    marital_status,
+  family=binomial (link='logit'), data=pass)
+
+stud1_24w_summary <- tbl_regression(stud1_24w, exponentiate = TRUE, 
+                               label = list(student="Student")) 
+
+
+stud1_merge <- tbl_merge(
+  tbls = list(stud1_ovr_summary, stud1_6w_summary, stud1_14w_summary, stud1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+stud1_merge <- stud1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+stud1_merge <- stud1_merge %>% 
+  modify_table_body(~ .x %>% filter(variable == "student"))
+stud1_merge
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Education - adjusted
+ed1_ovr <- glm(abortion_view1 ~ education + age + pregnant_before + marital_status,
+  family=binomial (link='logit'), data=pass)
+
+ed1_ovr_summary <- tbl_regression(ed1_ovr, exponentiate = TRUE, 
+                               label = list(education="Education")) 
+
+# Education - 6 Weeks
+ed1_6w <- glm(abortion_view6 ~ education + age + pregnant_before + marital_status,
+  family=binomial (link='logit'), data=pass)
+
+ed1_6w_summary <- tbl_regression(ed1_6w, exponentiate = TRUE, 
+                               label = list(education="Education")) 
+
+# Education - 14 Weeks
+ed1_14w <- glm(abortion_view5 ~ education + age + pregnant_before + marital_status,
+  family=binomial (link='logit'), data=pass)
+
+ed1_14w_summary <- tbl_regression(ed1_14w, exponentiate = TRUE, 
+                               label = list(education="Education")) 
+
+# Education  - 24 Weeks
+ed1_24w <- glm(abortion_view8 ~ education + age + pregnant_before + marital_status,
+  family=binomial (link='logit'), data=pass)
+
+ed1_24w_summary <- tbl_regression(ed1_24w, exponentiate = TRUE, 
+                               label = list(education="Education")) 
+
+
+ed1_merge <- tbl_merge(
+  tbls = list(ed1_ovr_summary, ed1_6w_summary, ed1_14w_summary, ed1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+ed1_merge <- ed1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+ed1_merge <- ed1_merge %>% 
+  modify_table_body(~ .x %>% filter(variable == "education"))
+ed1_merge
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Stacking demographic OR tables
+table_s1 <- tbl_stack(
+  tbls = list(age1_merge, race1_merge, eth1_merge, mar1_merge, inc1_merge, preg1_merge, emp1_merge, stud1_merge, ed1_merge, pol_sa_merge, rel1_sa_merge, rel2_sa_merge, count_sa_merge))
+
+table_s1
+
+```
+
+
+## Table S2
+### Associations between political, religious, and geographic characteristics and abortion views for week-based scenarios, estimated using unadjusted logistic regression models. The models are estimating the odds of believing that abortion should be illegal or that “it depends” in this case (vs. abortion should be legal in this case) and are adjusted for age, education status, marital status, and prior pregnancy.
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Pol - Overall
+pol_ovr_summary <- tbl_regression(fig2a_ovr, exponentiate = TRUE, 
+                      label = list(pol_orientation_new="Political Orientation")) 
+
+# Pol - 6 Weeks
+pol_6w_summary <- tbl_regression(fig2a_6w, exponentiate = TRUE, 
+                        label = list(pol_orientation_new="Political Orientation")) 
+
+# Pol - 14 Weeks
+pol_14w_summary <- tbl_regression(fig2a_14w, exponentiate = TRUE, 
+                      label = list(pol_orientation_new="Political Orientation")) 
+
+# Pol - 24 Weeks
+pol_24w_summary <- tbl_regression(fig2a_24w, exponentiate = TRUE, 
+                      label = list(pol_orientation_new="Political Orientation")) 
+
+
+pol_merge <- tbl_merge(
+  tbls = list(pol_ovr_summary, pol_6w_summary, pol_14w_summary, pol_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+pol_merge <- pol_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+pol_merge <- pol_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+pol_merge
+
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Rel1 - Overall
+rel1_ovr_summary <- tbl_regression(fig2b_ovr, exponentiate = TRUE, 
+                      label = list(religious_person="Religious Identity")) 
+
+# Pol - 6 Weeks
+rel1_6w_summary <- tbl_regression(fig2b_6w, exponentiate = TRUE, 
+                        label = list(religious_person="Religious Identity")) 
+
+# Pol - 14 Weeks
+rel1_14w_summary <- tbl_regression(fig2b_14w, exponentiate = TRUE, 
+                      label = list(religious_person="Religious Identity")) 
+
+# Pol - 24 Weeks
+rel1_24w_summary <- tbl_regression(fig2b_24w, exponentiate = TRUE, 
+                      label = list(religious_person="Religious Identity")) 
+
+
+rel1_merge <- tbl_merge(
+  tbls = list(rel1_ovr_summary, rel1_6w_summary, rel1_14w_summary, rel1_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+rel1_merge <- rel1_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+rel1_merge <- rel1_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+rel1_merge
+
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Rel1 - Overall
+rel2_ovr_summary <- tbl_regression(fig2c_ovr, exponentiate = TRUE, 
+              label = list(relgious_service_amount="Religious Service Attendance")) 
+
+# Pol - 6 Weeks
+rel2_6w_summary <- tbl_regression(fig2c_6w, exponentiate = TRUE, 
+             label = list(relgious_service_amount="Religious Service Attendance")) 
+
+# Pol - 14 Weeks
+rel2_14w_summary <- tbl_regression(fig2c_14w, exponentiate = TRUE, 
+              label = list(relgious_service_amount="Religious Service Attendance")) 
+
+# Pol - 24 Weeks
+rel2_24w_summary <- tbl_regression(fig2c_24w, exponentiate = TRUE, 
+              label = list(relgious_service_amount="Religious Service Attendance")) 
+
+
+rel2_merge <- tbl_merge(
+  tbls = list(rel2_ovr_summary, rel2_6w_summary, rel2_14w_summary, rel2_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+rel2_merge <- rel2_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+rel2_merge <- rel2_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+rel2_merge
+
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Rel1 - Overall
+count_ovr_summary <- tbl_regression(fig2d_ovr, exponentiate = TRUE, 
+              label = list(county="County of Residence")) 
+
+# Pol - 6 Weeks
+count_6w_summary <- tbl_regression(fig2d_6w, exponentiate = TRUE, 
+             label = list(county="County of Residence")) 
+
+# Pol - 14 Weeks
+count_14w_summary <- tbl_regression(fig2d_14w, exponentiate = TRUE, 
+              label = list(county="County of Residence")) 
+
+# Pol - 24 Weeks
+count_24w_summary <- tbl_regression(fig2d_24w, exponentiate = TRUE, 
+              label = list(county="County of Residence")) 
+
+
+count_merge <- tbl_merge(
+  tbls = list(count_ovr_summary, count_6w_summary, count_14w_summary, count_24w_summary),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+count_merge <- count_merge %>% modify_table_body(~ .x %>% select(-p.value_1, -p.value_2, -p.value_3, -p.value_4))
+count_merge <- count_merge %>% 
+  modify_table_body(~ .x %>% slice(1:3))
+count_merge
+
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Stacking demographic OR tables
+table_4 <- tbl_stack(
+  tbls = list(pol_merge, rel1_merge, rel2_merge, count_merge)
+)
+table_4
+
+```
+
+
+## Table S3
+### Distribution of independent variables for week-based abortion view scenarios.
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Race Ns
+# Overall
+race_pass_ovr <- pass %>% select(race, abortion_view1)
+race_n_ovr <- race_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(race = "Race"))
+race_n_ovr
+
+# 6 Weeks
+race_pass_6w <- pass %>% select(race, abortion_view6)
+race_n_6w <- race_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(race = "Race"))
+race_n_6w
+
+# 14 Weeks
+race_pass_14w <- pass %>% select(race, abortion_view5)
+race_n_14w <- race_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(race = "Race"))
+race_n_14w
+
+# 24 Weeks
+race_pass_24w <- pass %>% select(race, abortion_view8)
+race_n_24w <- race_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(race = "Race"))
+race_n_24w
+
+race_n_merge <- tbl_merge(
+  tbls = list(race_n_ovr, race_n_6w, race_n_14w, race_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+race_n_merge
+
+```
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Ethnicity Ns
+# Overall
+eth_pass_ovr <- pass %>% select(ethnicity, abortion_view1)
+eth_n_ovr <- eth_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(ethnicity = "Ethnicity"))
+eth_n_ovr
+
+# 6 Weeks
+eth_pass_6w <- pass %>% select(ethnicity, abortion_view6)
+eth_n_6w <- eth_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(ethnicity = "Ethnicity"))
+eth_n_6w
+
+# 14 Weeks
+eth_pass_14w <- pass %>% select(ethnicity, abortion_view5)
+eth_n_14w <- eth_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(ethnicity = "Ethnicity"))
+eth_n_14w
+
+# 24 Weeks
+eth_pass_24w <- pass %>% select(ethnicity, abortion_view8)
+eth_n_24w <- eth_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(ethnicity = "Ethnicity"))
+eth_n_24w
+
+eth_n_merge <- tbl_merge(
+  tbls = list(eth_n_ovr, eth_n_6w, eth_n_14w, eth_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+eth_n_merge
+
+```
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Marital Status Ns
+# Overall
+mar_pass_ovr <- pass %>% select(marital_status, abortion_view1)
+mar_n_ovr <- mar_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(marital_status = "Marital Status"))
+mar_n_ovr
+
+# 6 Weeks
+mar_pass_6w <- pass %>% select(marital_status, abortion_view6)
+mar_n_6w <- mar_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(marital_status = "Marital Status"))
+mar_n_6w
+
+# 14 Weeks
+mar_pass_14w <- pass %>% select(marital_status, abortion_view5)
+mar_n_14w <- mar_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(marital_status = "Marital Status"))
+mar_n_14w
+
+# 24 Weeks
+mar_pass_24w <- pass %>% select(marital_status, abortion_view8)
+mar_n_24w <- mar_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(marital_status = "Marital Status"))
+mar_n_24w
+
+mar_n_merge <- tbl_merge(
+  tbls = list(mar_n_ovr, mar_n_6w, mar_n_14w, mar_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+mar_n_merge
+
+```
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Household Income Ns
+# Overall
+inc_pass_ovr <- pass %>% select(hh_income_cat, abortion_view1)
+inc_n_ovr <- inc_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(hh_income_cat = "Household Income"))
+inc_n_ovr
+
+# 6 Weeks
+inc_pass_6w <- pass %>% select(hh_income_cat, abortion_view6)
+inc_n_6w <- inc_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(hh_income_cat = "Household Income"))
+inc_n_6w
+
+# 14 Weeks
+inc_pass_14w <- pass %>% select(hh_income_cat, abortion_view5)
+inc_n_14w <- inc_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(hh_income_cat = "Household Income"))
+inc_n_14w
+
+# 24 Weeks
+inc_pass_24w <- pass %>% select(hh_income_cat, abortion_view8)
+inc_n_24w <- inc_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(hh_income_cat = "Household Income"))
+inc_n_24w
+
+inc_n_merge <- tbl_merge(
+  tbls = list(inc_n_ovr, inc_n_6w, inc_n_14w, inc_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+inc_n_merge
+
+```
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Pregnancy Ns
+# Overall
+preg_pass_ovr <- pass %>% select(pregnant_before, abortion_view1)
+preg_n_ovr <- preg_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(pregnant_before = "Ever Been Pregnant"))
+preg_n_ovr
+
+# 6 Weeks
+preg_pass_6w <- pass %>% select(pregnant_before, abortion_view6)
+preg_n_6w <- preg_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(pregnant_before = "Ever Been Pregnant"))
+preg_n_6w
+
+# 14 Weeks
+preg_pass_14w <- pass %>% select(pregnant_before, abortion_view5)
+preg_n_14w <- preg_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(pregnant_before = "Ever Been Pregnant"))
+preg_n_14w
+
+# 24 Weeks
+preg_pass_24w <- pass %>% select(pregnant_before, abortion_view8)
+preg_n_24w <- preg_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(pregnant_before = "Ever Been Pregnant"))
+preg_n_24w
+
+preg_n_merge <- tbl_merge(
+  tbls = list(preg_n_ovr, preg_n_6w, preg_n_14w, preg_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+preg_n_merge
+
+```
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Employment Status Ns
+# Overall
+emp_pass_ovr <- pass %>% select(employment, abortion_view1)
+emp_n_ovr <- emp_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(employment = "Employment Status"))
+emp_n_ovr
+
+# 6 Weeks
+emp_pass_6w <- pass %>% select(employment, abortion_view6)
+emp_n_6w <- emp_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(employment = "Employment Status"))
+emp_n_6w
+
+# 14 Weeks
+emp_pass_14w <- pass %>% select(employment, abortion_view5)
+emp_n_14w <- emp_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(employment = "Employment Status"))
+emp_n_14w
+
+# 24 Weeks
+emp_pass_24w <- pass %>% select(employment, abortion_view8)
+emp_n_24w <- emp_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(employment = "Employment Status"))
+emp_n_24w
+
+emp_n_merge <- tbl_merge(
+  tbls = list(emp_n_ovr, emp_n_6w, emp_n_14w, emp_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+emp_n_merge
+
+```
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Student Ns
+# Overall
+stud_pass_ovr <- pass %>% select(student, abortion_view1)
+stud_n_ovr <- stud_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(student = "Student"))
+stud_n_ovr
+
+# 6 Weeks
+stud_pass_6w <- pass %>% select(student, abortion_view6)
+stud_n_6w <- stud_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(student = "Student"))
+stud_n_6w
+
+# 14 Weeks
+stud_pass_14w <- pass %>% select(student, abortion_view5)
+stud_n_14w <- stud_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(student = "Student"))
+stud_n_14w
+
+# 24 Weeks
+stud_pass_24w <- pass %>% select(student, abortion_view8)
+stud_n_24w <- stud_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(student = "Student"))
+stud_n_24w
+
+stud_n_merge <- tbl_merge(
+  tbls = list(stud_n_ovr, stud_n_6w, stud_n_14w, stud_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+stud_n_merge
+
+```
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Education Ns
+# Overall
+ed_pass_ovr <- pass %>% select(education, abortion_view1)
+ed_n_ovr <- ed_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(education = "Education"))
+ed_n_ovr
+
+# 6 Weeks
+ed_pass_6w <- pass %>% select(education, abortion_view6)
+ed_n_6w <- ed_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(education = "Education"))
+ed_n_6w
+
+# 14 Weeks
+ed_pass_14w <- pass %>% select(education, abortion_view5)
+ed_n_14w <- ed_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(education = "Education"))
+ed_n_14w
+
+# 24 Weeks
+ed_pass_24w <- pass %>% select(education, abortion_view8)
+ed_n_24w <- ed_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(education = "Education"))
+ed_n_24w
+
+ed_n_merge <- tbl_merge(
+  tbls = list(ed_n_ovr, ed_n_6w, ed_n_14w, ed_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+ed_n_merge
+
+```
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Age Ns
+# Overall
+age_pass_ovr <- pass %>% select(age, abortion_view1)
+age_n_ovr <- age_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_continuous() ~ "{mean} ({sd});[{min},{max}]"),
+  missing_text = "Missing",
+  label = list(age = "Age"))
+age_n_ovr
+
+# 6 Weeks
+age_pass_6w <- pass %>% select(age, abortion_view6)
+age_n_6w <- age_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_continuous() ~ "{mean} ({sd});[{min},{max}]"),
+  missing_text = "Missing",
+  label = list(age = "Age"))
+age_n_6w
+
+# 14 Weeks
+age_pass_14w <- pass %>% select(age, abortion_view5)
+age_n_14w <- age_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_continuous() ~ "{mean} ({sd});[{min},{max}]"),
+  missing_text = "Missing",
+  label = list(age = "Age"))
+age_n_14w
+
+# 24 Weeks
+age_pass_24w <- pass %>% select(age, abortion_view8)
+age_n_24w <- age_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_continuous() ~ "{mean} ({sd});[{min},{max}]"),
+  missing_text = "Missing",
+  label = list(age = "Age"))
+age_n_24w
+
+age_n_merge <- tbl_merge(
+  tbls = list(age_n_ovr, age_n_6w, age_n_14w, age_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+age_n_merge
+
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Political Orientation Ns
+# Overall
+pol_pass_ovr <- pass %>% select(pol_orientation_new, abortion_view1)
+pol_n_ovr <- pol_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(pol_orientation_new = "Political Orientation"))
+
+# 6 Weeks
+pol_pass_6w <- pass %>% select(pol_orientation_new, abortion_view6)
+pol_n_6w <- pol_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(pol_orientation_new = "Political Orientation"))
+
+# 14 Weeks
+pol_pass_14w <- pass %>% select(pol_orientation_new, abortion_view5)
+pol_n_14w <- pol_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(pol_orientation_new = "Political Orientation"))
+
+# 24 Weeks
+pol_pass_24w <- pass %>% select(pol_orientation_new, abortion_view8)
+pol_n_24w <- pol_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(pol_orientation_new = "Political Orientation"))
+
+pol_n_merge <- tbl_merge(
+  tbls = list(pol_n_ovr, pol_n_6w, pol_n_14w, pol_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+pol_n_merge
+
+```
+
+```{r, include = FALSE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Religious Identity Ns
+# Overall
+relp_pass_ovr <- pass %>% select(religious_person, abortion_view1)
+relp_n_ovr <- relp_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(religious_person = "Religious Identity"))
+relp_n_ovr
+
+# 6 Weeks
+relp_pass_6w <- pass %>% select(religious_person, abortion_view6)
+relp_n_6w <- relp_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(religious_person = "Religious Identity"))
+relp_n_6w
+
+# 14 Weeks
+relp_pass_14w <- pass %>% select(religious_person, abortion_view5)
+relp_n_14w <- relp_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(religious_person = "Religious Identity"))
+relp_n_14w
+
+# 24 Weeks
+relp_pass_24w <- pass %>% select(religious_person, abortion_view8)
+relp_n_24w <- relp_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(religious_person = "Religious Identity"))
+relp_n_24w
+
+relp_n_merge <- tbl_merge(
+  tbls = list(relp_n_ovr, relp_n_6w, relp_n_14w, relp_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+relp_n_merge
+
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# Religious Service Attendance Ns
+# Overall
+rela_pass_ovr <- pass %>% select(relgious_service_amount, abortion_view1)
+rela_n_ovr <- rela_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(relgious_service_amount = "Religious Service Attendance"))
+
+# 6 Weeks
+rela_pass_6w <- pass %>% select(relgious_service_amount, abortion_view6)
+rela_n_6w <- rela_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(relgious_service_amount = "Religious Service Attendance"))
+
+# 14 Weeks
+rela_pass_14w <- pass %>% select(relgious_service_amount, abortion_view5)
+rela_n_14w <- rela_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(relgious_service_amount = "Religious Service Attendance"))
+
+# 24 Weeks
+rela_pass_24w <- pass %>% select(relgious_service_amount, abortion_view8)
+rela_n_24w <- rela_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(relgious_service_amount = "Religious Service Attendance"))
+
+rela_n_merge <- tbl_merge(
+  tbls = list(rela_n_ovr, rela_n_6w, rela_n_14w, rela_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+rela_n_merge
+
+```
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='hide'}
+# County Ns
+# Overall
+count_pass_ovr <- pass %>% select(county, abortion_view1)
+count_n_ovr <- count_pass_ovr |> tbl_summary(
+  by = abortion_view1,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(county = "County of Residence"))
+
+# 6 Weeks
+count_pass_6w <- pass %>% select(county, abortion_view6)
+count_n_6w <- count_pass_6w |> tbl_summary(
+  by = abortion_view6,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(county = "County of Residence"))
+
+# 14 Weeks
+count_pass_14w <- pass %>% select(county, abortion_view5)
+count_n_14w <- count_pass_14w |> tbl_summary(
+  by = abortion_view5,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(county = "County of Residence"))
+
+# 24 Weeks
+count_pass_24w <- pass %>% select(county, abortion_view8)
+count_n_24w <- count_pass_24w |> tbl_summary(
+  by = abortion_view8,
+  statistic = list(all_categorical() ~ "{n}"),
+  missing_text = "Missing",
+  label = list(county = "County of Residence"))
+
+count_n_merge <- tbl_merge(
+  tbls = list(count_n_ovr, count_n_6w, count_n_14w, count_n_24w),
+  tab_spanner = c("Overall", "6 Weeks", "14 Weeks", "24 Weeks")
+)
+count_n_merge
+
+```
+
+
+```{r, include = TRUE, warning = FALSE, message = FALSE, echo=FALSE, results='asis'}
+# Stacking demographic OR tables
+table_s2 <- tbl_stack(
+  tbls = list(age_n_merge, race_n_merge, eth_n_merge, mar_n_merge, inc_n_merge, preg_n_merge,    emp_n_merge, stud_n_merge, ed_n_merge, pol_n_merge, relp_n_merge,
+              rela_n_merge, count_n_merge))
+
+table_s2
+
+```
+
+
